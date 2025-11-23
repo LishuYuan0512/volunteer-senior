@@ -1,6 +1,7 @@
 // const API_BASE = 'https://localhost:5000';
 // const endpoint = '/api/register/senior';
 import { i18n } from './language-string.js';
+
 // console.log('i18n loaded:', i18n); 
 
 // ---- Tabs (guarded so pages without tabs won't throw) ----
@@ -74,12 +75,14 @@ function applyI18n(lang){
     if (dict[key] !== undefined) el.placeholder = dict[key];
   });
 
-  localStorage.setItem('lang', lang);
+  // localStorage.setItem('lang', lang);
+  sessionStorage.setItem('lang', lang);
+
   if (langSelect) langSelect.value = lang;
 }
 
 // init language
-const savedLang = localStorage.getItem('lang') || 'en';
+const savedLang = sessionStorage.getItem('lang') || 'en';
 if (langSelect) langSelect.value = savedLang;
 applyI18n(savedLang);
 langSelect?.addEventListener('change', e => applyI18n(e.target.value));
@@ -168,8 +171,10 @@ if (loginForm) {
 
 
       if (data.data) {
-           localStorage.setItem('email', data.data.email);
-           localStorage.setItem('role', data.data.role);
+          //  localStorage.setItem('email', data.data.email);
+          //  localStorage.setItem('role', data.data.role);
+          sessionStorage.setItem('email', data.data.email);
+          sessionStorage.setItem('role', data.data.role);
       }
 
       // const redirectTo = new URLSearchParams(location.search).get('next') || '/';
@@ -224,96 +229,234 @@ if (loginForm) {
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// function refreshAuthUI() {
+//   const btn = document.getElementById('ctaJoin');
+//   const regLink = document.getElementById('register-nav');
+//   const email = localStorage.getItem('email');         
+//   const role  = localStorage.getItem('role');
+//   const isLoggedIn = !!email;
+
+
+
+//   const {start_d: s, end_d: e}=getNextWeekRange();
+//   document.getElementById('s-date').textContent = toYMD(s);
+//   document.getElementById('e-date').textContent = toYMD(e);
+
+//   if (regLink) {
+//     if (isLoggedIn) {
+//       regLink.textContent = 'Profile';
+//       regLink.setAttribute('data-i18n', 'navProfile'); 
+//       const profileHref =
+//         role === 'volunteer' ? '/vs/volunteer-profile.html' :
+//         role === 'senior'    ? '/vs/senior-profile.html' :
+//                                '#';
+//       regLink.href = profileHref;
+//       // console.log(role)
+//     } else {
+
+//       regLink.textContent = 'Register';
+//       regLink.setAttribute('data-i18n', 'navRegister');
+//       regLink.href = '/vs/pages/register.html'; 
+//     }
+//   }
+
+//   if (!btn) return;
+
+//   if (isLoggedIn) {
+//     btn.href = '#';
+//     btn.innerHTML = '<i class="fas fa-sign-out-alt"></i><span>Logout</span>';
+
+
+//     if (role=='senior'){
+//       document.getElementById('forservice').style.removeProperty('display');
+//       document.getElementById('senior_btn').setAttribute('href', 'pages/askforservice.html');
+//       document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
+
+//       document.getElementById('senior_btn').style.removeProperty('display');
+//       document.getElementById('volunteer_btn').style.display = 'none';
+
+//     } else {
+//       document.getElementById('forservice').style.display = 'none';
+//       document.getElementById('senior_btn').setAttribute('href', 'pages/login.html');
+//       document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
+
+//       document.getElementById('volunteer_btn').style.removeProperty('display');
+//       document.getElementById('senior_btn').style.display = 'none';
+//     }    
+
+//     btn.replaceWith(btn.cloneNode(true));
+//     const freshBtn = document.getElementById('ctaJoin');
+//     freshBtn.addEventListener('click', async (e) => {
+//       e.preventDefault();
+//       try {
+
+//         await fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(()=>{});
+//       } finally {
+//         localStorage.removeItem('email');
+//         localStorage.removeItem('role');
+
+//         refreshAuthUI();
+
+//         location.assign('/vs/index.html');
+        
+//       }
+//     });
+//   } else {
+
+//       document.getElementById('forservice').style.display = 'none';
+
+//       document.getElementById('senior_btn').setAttribute('href', 'pages/login.html');
+//       document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
+
+//       document.getElementById('volunteer_btn').style.removeProperty('display');
+//       document.getElementById('senior_btn').style.removeProperty('display');
+
+
+
+//     btn.href = '/vs/pages/login.html';
+//     btn.innerHTML = '<i class="fas fa-hands-helping"></i><span>Login</span>';
+
+//     btn.replaceWith(btn.cloneNode(true));
+//   }
+// }
+
 function refreshAuthUI() {
   const btn = document.getElementById('ctaJoin');
   const regLink = document.getElementById('register-nav');
-  const email = localStorage.getItem('email');         
-  const role  = localStorage.getItem('role');
+  const avatarEl = document.getElementById('avatar-id');
+
+  const email = sessionStorage.getItem('email');
+  const role  = sessionStorage.getItem('role');
   const isLoggedIn = !!email;
 
+  // ---------- safe date rendering ----------
+  const sDateEl = document.getElementById('s-date');
+  const eDateEl = document.getElementById('e-date');
+  if (sDateEl && eDateEl) {
+    const {start_d: s, end_d: e} = getNextWeekRange();
+    sDateEl.textContent = toYMD(s);
+    eDateEl.textContent = toYMD(e);
+  }
 
+  // ---------- avatar (safe + fixed endpoint + cache-bust) ----------
+  if (avatarEl) {
+    const placeholder = '/vs/assets/img/avatar-placeholder.png';
 
-  const {start_d: s, end_d: e}=getNextWeekRange();
-  document.getElementById('s-date').textContent = toYMD(s);
-  document.getElementById('e-date').textContent = toYMD(e);
-
-  if (regLink) {
-    if (isLoggedIn) {
-      regLink.textContent = 'Profile';
-      regLink.setAttribute('data-i18n', 'navProfile'); 
-      const profileHref =
-        role === 'volunteer' ? '/vs/volunteer-profile.html' :
-        role === 'senior'    ? '/vs/senior-profile.html' :
-                               '#';
-      regLink.href = profileHref;
-      // console.log(role)
+    if (!isLoggedIn) {
+      // 未登录：隐藏或显示默认图
+      avatarEl.src = placeholder;
+      avatarEl.style.display = 'none';   // 你想一直显示默认图就删掉这行
     } else {
+      avatarEl.style.removeProperty('display');
 
-      regLink.textContent = 'Register';
-      regLink.setAttribute('data-i18n', 'navRegister');
-      regLink.href = '/vs/pages/register.html'; 
+      if (role === 'volunteer') {
+        // ✅ volunteer：用固定接口拿 GridFS 头像
+        avatarEl.src = '/api/volunteer/photo?t=' + Date.now();
+        avatarEl.onerror = () => { avatarEl.src = placeholder; };
+      } else {
+        // senior 或其他角色：目前没有头像逻辑，显示默认图
+        avatarEl.src = placeholder;
+      }
     }
   }
 
+  // ---------- profile/register link ----------
+  if (regLink) {
+    if (isLoggedIn) {
+      if (role=='senior') {
+        regLink.textContent = 'History' 
+      } else {
+        regLink.textContent = 'Dashboard' 
+      }
+      regLink.setAttribute('data-i18n', 'navProfile');
+      const profileHref =
+        role === 'volunteer' ? '/vs/pages/volunteer-dashboard.html' :
+        role === 'senior'    ? '/vs/pages/services.html' :
+                               '#';
+      regLink.href = profileHref;
+    } else {
+      regLink.textContent = 'Register';
+      regLink.setAttribute('data-i18n', 'navRegister');
+      regLink.href = '/vs/pages/register.html';
+    }
+  }
+
+  // 当前页面没有 ctaJoin 就不继续动其它按钮
   if (!btn) return;
+
+  // ---------- elements that may not exist ----------
+  const forserviceEl   = document.getElementById('forservice');
+  const seniorBtnEl    = document.getElementById('senior_btn');
+  const volunteerBtnEl = document.getElementById('volunteer_btn');
+  const vol_avatar = document.getElementById('avatar-id');
 
   if (isLoggedIn) {
     btn.href = '#';
     btn.innerHTML = '<i class="fas fa-sign-out-alt"></i><span>Logout</span>';
 
+    if (role === 'senior') {
+      if (vol_avatar)
+        vol_avatar.style.display = 'none';
 
-    if (role=='senior'){
-      document.getElementById('forservice').style.removeProperty('display');
-      document.getElementById('senior_btn').setAttribute('href', 'pages/askforservice.html');
-      document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
+      if (forserviceEl) forserviceEl.style.removeProperty('display');
+      if (seniorBtnEl) {
+        seniorBtnEl.style.removeProperty('display');
+        seniorBtnEl.setAttribute('href', 'pages/askforservice.html');
+      }
+      if (volunteerBtnEl) {
+        volunteerBtnEl.style.display = 'none';
+        volunteerBtnEl.setAttribute('href', 'pages/login.html');
+      }
 
-      document.getElementById('senior_btn').style.removeProperty('display');
-      document.getElementById('volunteer_btn').style.display = 'none';
-
+      
     } else {
-      document.getElementById('forservice').style.display = 'none';
-      document.getElementById('senior_btn').setAttribute('href', 'pages/login.html');
-      document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
+      vol_avatar.style.removeProperty('display')
 
-      document.getElementById('volunteer_btn').style.removeProperty('display');
-      document.getElementById('senior_btn').style.display = 'none';
-    }    
+      if (forserviceEl) forserviceEl.style.display = 'none';
+      if (volunteerBtnEl) {
+        volunteerBtnEl.style.removeProperty('display');
+        volunteerBtnEl.setAttribute('href', 'pages/login.html');
+      }
+      if (seniorBtnEl) {
+        seniorBtnEl.style.display = 'none';
+        seniorBtnEl.setAttribute('href', 'pages/login.html');
+      }
+    }
 
+    // rebind logout
     btn.replaceWith(btn.cloneNode(true));
     const freshBtn = document.getElementById('ctaJoin');
-    freshBtn.addEventListener('click', async (e) => {
+    freshBtn?.addEventListener('click', async (e) => {
       e.preventDefault();
       try {
-
         await fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(()=>{});
       } finally {
-        localStorage.removeItem('email');
-        localStorage.removeItem('role');
-
+        sessionStorage.removeItem('email');
+        sessionStorage.removeItem('role');
         refreshAuthUI();
-
         location.assign('/vs/index.html');
-        
       }
     });
+
   } else {
-
-      document.getElementById('forservice').style.display = 'none';
-
-      document.getElementById('senior_btn').setAttribute('href', 'pages/login.html');
-      document.getElementById('volunteer_btn').setAttribute('href', 'pages/login.html');
-
-      document.getElementById('volunteer_btn').style.removeProperty('display');
-      document.getElementById('senior_btn').style.removeProperty('display');
-
-
+    if (forserviceEl) forserviceEl.style.display = 'none';
+    if (seniorBtnEl) {
+      seniorBtnEl.style.removeProperty('display');
+      seniorBtnEl.setAttribute('href', 'pages/login.html');
+    }
+    if (volunteerBtnEl) {
+      volunteerBtnEl.style.removeProperty('display');
+      volunteerBtnEl.setAttribute('href', 'pages/login.html');
+    }
 
     btn.href = '/vs/pages/login.html';
     btn.innerHTML = '<i class="fas fa-hands-helping"></i><span>Login</span>';
-
     btn.replaceWith(btn.cloneNode(true));
   }
 }
+
+
+
 
 
 document.addEventListener('DOMContentLoaded', refreshAuthUI);
@@ -405,6 +548,17 @@ async function handleSubmitToApi(formId, msgId, endpoint, buildPayload){
           await showMsg({ title: 'Inscription', text: err_msg, icon: 'error' });
         }
         // alert(err.message);
+      } else if (formId=='form-ask') {
+            let errmsg=err?.message;
+            let errtitle='Error';
+          if (lang=='en'){
+            errmsg=err?.message;
+            errtitle='Error';
+          } else {
+            errmsg=err?.message;
+            errtitle='Error';
+          }
+          await showMsg({ title: errtitle, text: errmsg, icon: 'error' });
       }
     }
   });
@@ -479,7 +633,7 @@ handleSubmitToApi('form-ask', 'a-msg', '/api/askfor', (form) => {
     form.querySelectorAll('.checks input[type="checkbox"][name^="need-"]:checked')
   ).map(cb => cb.value);
 
-  const email = localStorage.getItem('email'); 
+  const email = sessionStorage.getItem('email'); 
 
   return {
     email,
