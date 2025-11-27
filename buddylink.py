@@ -91,6 +91,16 @@ def current_user():
         return None
     return {"id": uid, "email": email}
 
+def send_email(to_email: str, subject: str, body: str):
+    """
+    Simulate sending email by printing content to console.
+    """
+    print("\n================= EMAIL SIMULATION =================")
+    print("TO:", to_email)
+    print("SUBJECT:", subject)
+    print(body)
+    print("===================================================\n")
+
 
 _EMAIL_RE = re.compile(
     r"^(?=.{1,254}$)"                       
@@ -888,7 +898,183 @@ def get_volunteer_photo(file_id):
         }
     )
 
+from bson import ObjectId
+from flask import jsonify
 
+@app.route("/api/volunteer/requests", methods=["GET"])
+@app.route("/volunteer/requests", methods=["GET"])
+def api_volunteer_requests():
+    user = current_user()
+    if not user:
+        return jsonify(success=False, message="Unauthorized"), 401
+
+    try:
+        uid = ObjectId(user["id"])
+    except Exception:
+        return jsonify(success=False, message="Bad user id"), 400
+
+    user_doc = users.find_one({"_id": uid}, {"volunteer_id": 1})
+    if not user_doc:
+        return jsonify(success=False, message="User not found"), 404
+
+    vol_id = user_doc.get("volunteer_id")
+    if not vol_id:
+        return jsonify(success=False, message="Not a volunteer account"), 403
+
+    if isinstance(vol_id, str):
+        vol_id = ObjectId(vol_id)
+
+    reqs = list(match.find(
+        {
+            "status": "pending",
+            "candidates": vol_id
+        },
+        {
+            "requirements": 1,
+            "senior_id": 1
+        }
+    ))
+
+    enriched = []
+    for r in reqs:
+        senior = seniors.find_one({"_id": r.get("senior_id")}, {"notes": 1}) or {}
+        req = r.get("requirements", {}) or {}
+
+        enriched.append({
+            "request_id":  str(r["_id"]),
+            "askfor":      req.get("askfor", []),
+            "appointment": req.get("appointment", []),
+            "notes":       senior.get("notes", "")
+        })
+
+    return jsonify(success=True, data=enriched), 200
+
+
+@app.post("/requests/<req_id>/accept")
+@app.post("/api/requests/<req_id>/accept")
+def api_accept_request(req_id):
+    user = current_user()
+    if not user:
+        return jsonify(success=False, message="Unauthorized"), 401
+
+    uid = ObjectId(user["id"])
+    user_doc = users.find_one({"_id": uid}, {"volunteer_id": 1})
+
+    try:
+        vol_id = ObjectId(user_doc.get("volunteer_id"))
+    except:
+        return jsonify(success=False, message="Invalid volunteer id"), 400
+
+    rid = ObjectId(req_id)
+
+    result = match.update_one(
+        {
+            "_id": rid,
+            "status": "pending",
+            "candidates": vol_id
+        },
+        {
+            "$set": {
+                "status": "accepted",
+                "accepted_volunteer_id": vol_id
+            }
+        }
+    )
+
+    if result.modified_count == 0:
+        return jsonify(success=False, message="This request is no longer available"), 409
+
+
+    # ==================== Simulate sending emails ====================
+    m = match.find_one({"_id": rid})
+    if m:
+        senior_id = m.get("senior_id")
+        req = m.get("requirements", {}) or {}
+        askfor = req.get("askfor", [])
+        appointment = req.get("appointment", [])
+
+        # senior-info email）
+        senior_doc = seniors.find_one({"_id": senior_id}) or {}
+        senior_user = users.find_one({"senior_id": senior_id}, {"email": 1}) or {}
+        senior_email = senior_user.get("email", "(no email found)")
+
+        # volunteer info
+        vol_doc = volunteers.find_one({"_id": vol_id}) or {}
+        vol_name = f"{vol_doc.get('firstname', '')} {vol_doc.get('lastname', '')}".strip()
+        vol_phone = vol_doc.get("phone", "(no phone)")
+
+        # create email
+        subject = "BuddyLink Notification — A volunteer accepted your request"
+        body = f"""
+            Hello {senior_doc.get('firstname', 'Senior')},
+
+            Your request has been accepted.
+
+            Volunteer Info:
+            - Name: {vol_name}
+            - Phone: {vol_phone}
+
+            Service Requested:
+            - {", ".join(askfor) if askfor else "N/A"}
+
+            Preferred Time:
+            - {", ".join(appointment) if appointment else "N/A"}
+
+            (This is a simulated email for demo. No real email was sent.)
+        """
+
+        send_email(senior_email, subject, body)
+
+    return jsonify(success=True)
+
+
+from bson import ObjectId
+from flask import jsonify, session
+
+@app.route("/api/volunteer/upcoming", methods=["GET"])
+def volunteer_upcoming():
+    """Return accepted requests for the logged-in volunteer."""
+    user = session.get("user")
+    if not user:
+        return jsonify(success=False, message="Unauthorized"), 401
+    try:
+        uid = ObjectId(user["id"])
+    except Exception:
+        return jsonify(success=False, message="Bad user id"), 400
+
+    user_doc = users.find_one({"_id": uid}, {"volunteer_id": 1})
+    if not user_doc:
+        return jsonify(success=False, message="User not found"), 404
+
+    vol_id = ObjectId(user["volunteer_id"])
+    if not vol_id:
+        return jsonify(success=False, message="Not a volunteer account"), 403
+    if isinstance(vol_id, str):
+        vol_id = ObjectId(vol_id)
+
+    # 这个 volunteer 接受的所有服务
+    reqs = list(db.match.find({
+        "accepted_volunteer_id": vol_id,
+        "status": "accepted"
+    }))
+
+    results = []
+    for r in reqs:
+        senior = db.seniors.find_one({"_id": r["senior_id"]}) or {}
+
+        results.append({
+            "request_id": str(r["_id"]),
+            "requirements": r.get("requirements", {}),
+            "booking_at": r.get("booking_at"),
+            "senior_info": {
+                "firstname": senior.get("firstname", ""),
+                "lastname": senior.get("lastname", ""),
+                "city": senior.get("city", ""),
+                "phone": senior.get("phone", "")
+            }
+        })
+
+    return jsonify({"success": True, "data": results})
 
 @app.route("/services/<service_id>/rating", methods=["PATCH"])
 def update_service_rating(service_id):
